@@ -1,6 +1,5 @@
 use babilado_types::Event;
 use jsonl::Connection;
-use std::io::BufReader;
 use std::net::TcpListener;
 
 fn main() -> anyhow::Result<()> {
@@ -8,7 +7,7 @@ fn main() -> anyhow::Result<()> {
 
     for stream in listener.incoming() {
         let stream = stream?;
-        let mut connection = Connection::new(BufReader::new(stream.try_clone()?), stream);
+        let mut connection = Connection::new_from_tcp_stream(stream)?;
 
         loop {
             let event: Event = connection.read()?;

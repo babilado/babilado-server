@@ -8,4 +8,4 @@ version = "0.1.0"
 [dependencies]
 anyhow = "1.0"
 babilado-types = "0.1.0"
-jsonl = "1.1"
+jsonl = "1.2"
