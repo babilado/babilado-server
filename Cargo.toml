@@ -1,0 +1,8 @@
+[package]
+authors = ["babilado developers"]
+edition = "2018"
+license = "MIT OR Apache-2.0"
+name = "babilado-server"
+version = "0.1.0"
+
+[dependencies]
