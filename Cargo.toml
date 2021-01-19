@@ -8,5 +8,5 @@ version = "0.1.0"
 [dependencies]
 anyhow = "1.0"
 babilado-types = "0.1.0"
-jsonl = {version = "3.0", features = ["tokio"]}
+jsonl = {version = "4.0", features = ["tokio"]}
 tokio = {version = "1.0", features = ["full"]}

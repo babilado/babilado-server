@@ -75,9 +75,9 @@ checksum = "dd25036021b0de88a0aff6b850051563c6516d0bf53f8638938edbb9de732736"
 
 [[package]]
 name = "jsonl"
-version = "3.0.0"
+version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "729143aa495f31dbe195a49e799beee55bb17a40350e4ce117ebe9bca81d7dba"
+checksum = "1abae98f45234fc1980c198798166a80ad6b35eb5b7db4caa7bc72ff919e6b80"
 dependencies = [
  "serde",
  "serde_json",
