@@ -7,6 +7,6 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = "1.0"
-babilado-types = "0.1.0"
+babilado-types = "0.2.0"
 jsonl = {version = "4.0", features = ["tokio"]}
 tokio = {version = "1.0", features = ["full"]}
