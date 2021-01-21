@@ -1,13 +1,15 @@
-use babilado_types::Event;
+use babilado_types::{Event, User};
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::io::{self, BufReader};
 use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tokio::{select, task};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let users = Arc::new(Mutex::new(Vec::new()));
     let (clients_tx, clients_rx) = mpsc::channel(100);
     let (events_tx, events_rx) = mpsc::channel(100);
     task::spawn(forward_events(clients_rx, events_rx));
@@ -20,8 +22,9 @@ async fn main() -> anyhow::Result<()> {
         let clients_tx = clients_tx.clone();
         let events_tx = events_tx.clone();
 
+        let users = Arc::clone(&users);
         task::spawn(async {
-            if let Err(e) = handle_stream(stream, clients_tx, events_tx).await {
+            if let Err(e) = handle_stream(stream, users, clients_tx, events_tx).await {
                 eprintln!("Error: {:?}", e);
             }
         });
@@ -59,11 +62,26 @@ async fn forward_events(
 
 async fn handle_stream(
     stream: io::Result<TcpStream>,
+    users: Arc<Mutex<Vec<User>>>,
     clients_tx: mpsc::Sender<Client>,
     events_tx: mpsc::Sender<(Event, SocketAddr)>,
 ) -> anyhow::Result<()> {
-    let stream = stream?;
-
+    let mut stream = stream?;
+    let user: User = jsonl::read(BufReader::new(&mut stream)).await?;
+    if users
+        .lock()
+        .await
+        .iter()
+        .any(|u| u.nickname == user.nickname && u.tag == user.tag)
+    {
+        jsonl::write(
+            &mut stream,
+            &"Nickname and tag combination taken. Try a something else!",
+        )
+        .await?;
+        anyhow::bail!("Nickname and tag comination already in use");
+    }
+    users.lock().await.push(user);
     let address = stream.peer_addr()?;
     let (read_half, write_half) = stream.into_split();
 
