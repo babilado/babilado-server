@@ -5,12 +5,12 @@ use std::sync::Arc;
 use tokio::io::{self, BufReader};
 use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, RwLock};
 use tokio::{select, task};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let users = Arc::new(Mutex::new(Vec::new()));
+    let users = Arc::new(RwLock::new(Vec::new()));
     let (clients_tx, clients_rx) = mpsc::channel(100);
     let (events_tx, events_rx) = mpsc::channel(100);
     task::spawn(forward_events(clients_rx, events_rx));
@@ -88,18 +88,22 @@ fn handle_client_event(client_event: ClientEvent, clients: &mut Vec<Client>) {
 
 async fn handle_stream(
     stream: io::Result<TcpStream>,
-    users: Arc<Mutex<Vec<User>>>,
+    users: Arc<RwLock<Vec<User>>>,
     clients_tx: mpsc::Sender<ClientEvent>,
     events_tx: mpsc::Sender<(Event, SocketAddr)>,
 ) -> anyhow::Result<()> {
     let mut stream = stream?;
     let user: User = jsonl::read(BufReader::new(&mut stream)).await?;
-    if users
-        .lock()
-        .await
-        .iter()
-        .any(|u| u.nickname == user.nickname && u.tag == user.tag)
-    {
+
+    let is_taken = {
+        users
+            .read()
+            .await
+            .iter()
+            .any(|u| u.nickname == user.nickname && u.tag == user.tag)
+    };
+
+    if is_taken {
         jsonl::write(
             &mut stream,
             &"Nickname and tag combination taken. Try a something else!",
@@ -107,7 +111,11 @@ async fn handle_stream(
         .await?;
         anyhow::bail!("Nickname and tag comination already in use");
     }
-    users.lock().await.push(user);
+
+    {
+        users.write().await.push(user);
+    }
+
     let address = stream.peer_addr()?;
     let (read_half, write_half) = stream.into_split();
 
