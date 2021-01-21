@@ -1,4 +1,5 @@
 use babilado_types::Event;
+use std::net::SocketAddr;
 use tokio::io::{self, BufReader};
 use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::{TcpListener, TcpStream};
@@ -27,18 +28,28 @@ async fn main() -> anyhow::Result<()> {
     }
 }
 
+#[derive(Debug)]
+struct Client {
+    writer: OwnedWriteHalf,
+    address: SocketAddr,
+}
+
 async fn forward_events(
-    mut clients_rx: mpsc::Receiver<OwnedWriteHalf>,
-    mut events_rx: mpsc::Receiver<Event>,
+    mut clients_rx: mpsc::Receiver<Client>,
+    mut events_rx: mpsc::Receiver<(Event, SocketAddr)>,
 ) -> anyhow::Result<()> {
     let mut clients = Vec::new();
 
     loop {
         select! {
             Some(client) = clients_rx.recv() => clients.push(client),
-            Some(event) = events_rx.recv() => {
-                for client in &mut clients {
-                    jsonl::write(client, &event).await?;
+            Some((event, event_origin)) = events_rx.recv() => {
+                for Client { writer, address } in &mut clients {
+                    if *address == event_origin {
+                        continue;
+                    }
+
+                    jsonl::write(writer, &event).await?;
                 }
             },
             else => return Ok(()),
@@ -48,17 +59,25 @@ async fn forward_events(
 
 async fn handle_stream(
     stream: io::Result<TcpStream>,
-    clients_tx: mpsc::Sender<OwnedWriteHalf>,
-    events_tx: mpsc::Sender<Event>,
+    clients_tx: mpsc::Sender<Client>,
+    events_tx: mpsc::Sender<(Event, SocketAddr)>,
 ) -> anyhow::Result<()> {
     let stream = stream?;
+
+    let address = stream.peer_addr()?;
     let (read_half, write_half) = stream.into_split();
 
-    clients_tx.send(write_half).await.unwrap();
+    clients_tx
+        .send(Client {
+            writer: write_half,
+            address,
+        })
+        .await
+        .unwrap();
 
     let mut read_half = BufReader::new(read_half);
     loop {
         let event: Event = jsonl::read(&mut read_half).await?;
-        events_tx.send(event).await.unwrap();
+        events_tx.send((event, address)).await.unwrap();
     }
 }
